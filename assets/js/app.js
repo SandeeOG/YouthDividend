@@ -1,7 +1,12 @@
 /* Youth Dividend — router, templates and motion. */
 (() => {
-  const { ARTICLES, THEMES, FORMATS, UPCOMING, HORIZON } = window.YD;
+  const { UPCOMING, HORIZON } = window.YD;
   const ART = window.YD_ART;
+  const CONTENT = window.YD_CONTENT;
+  const TYPES = CONTENT.TYPES;
+  const FORMATS = Object.entries(TYPES).map(([key, t]) => ({ key, name: t.label, icon: t.icon, blurb: t.blurb, empty: t.empty }));
+  // Every post from research/, data-lab/ and resources/, newest first. Filled once content has loaded.
+  let ARTICLES = [];
 
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -22,10 +27,20 @@
   const plain = s => s.replace(/\*/g, '');
   const pad = (n, l = 3) => String(n).padStart(l, '0');
   const fmtDate = iso => new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
-  const fmtLabel = a => a.format + (a.series ? ' ' + a.series : '');
-  const bySlug = s => ARTICLES.find(a => a.slug === s);
-  const byDate = [...ARTICLES].sort((a, b) => b.date.localeCompare(a.date) || b.no - a.no);
-  const themeCount = name => ARTICLES.filter(a => a.theme === name).length;
+  const fmtLabel = a => a.series || a.format;
+  const bySlug = (s, type) => ARTICLES.find(a => a.slug === s && (!type || a.type === type));
+  const code = a => a.code;
+  const formatCount = key => ARTICLES.filter(a => a.type === key).length;
+  const tagText = (a, n = 2) => esc(a.tags.slice(0, n).join(' · '));
+  const esc = v => String(v ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  /* A post from the content folders, shaped for the templates. */
+  const toArticle = p => {
+    const st = window.YD_LAB && p.type === 'data-lab' ? window.YD_LAB.stat(p)
+      : p.stat && typeof p.stat === 'object' ? { v: String(p.stat.value ?? ''), unit: String(p.stat.unit ?? ''), l: String(p.stat.label ?? ''), source: p.stat.source } : null;
+    return { ...p, format: TYPES[p.type].label, dek: p.description, art: p.art || TYPES[p.type].icon, stat: st && st.v ? st : null };
+  };
+  const statShort = a => (a.stat ? `${esc(a.stat.v)}${a.stat.unit ? ' ' + esc(a.stat.unit) : ''}` : esc(a.format));
 
   const countable = v => {
     const m = /^([^\d]*)(\d+(?:\.\d+)?)([^\d]*)$/.exec(v);
@@ -37,11 +52,10 @@
       <p class="stat-l">${s.l}${s.source ? `<span class="stat-src label">Source: ${s.source}</span>` : ''}</p>
     </div>`;
   const meta = (a, extra = '') => `
-    <div class="meta"><span class="fmt">${fmtLabel(a)}</span><i></i><span>${a.theme}</span>${extra}</div>`;
+    <div class="meta"><span class="fmt">${esc(fmtLabel(a))}</span>${a.tags.length ? `<i></i><span>${tagText(a)}</span>` : ''}${extra}</div>`;
   const fig = (a, n) => `
-    <figure class="fig"><figcaption class="fig-cap"><span>Fig. ${pad(n, 2)}</span><span>${a.theme}</span></figcaption>${ART.render(a.art)}</figure>`;
-  const href = a => `#/read/${a.slug}`;
-  const STEPS = ['Problem', 'People', 'Policy', 'Proof', 'Lessons'];
+    <figure class="fig"><figcaption class="fig-cap"><span>Fig. ${pad(n, 2)}</span><span>${esc(a.tags[0] || a.format)}</span></figcaption>${ART.render(a.art)}</figure>`;
+  const href = a => a.href;
   const secMark = kind => `<div class="sec-mark" data-reveal>${ART.rule(kind)}</div>`;
 
   /* ==========================================================================
@@ -51,16 +65,16 @@
 
   /* ---------- Home ---------- */
   PAGES.home = () => {
-    const lead = ARTICLES[0];
+    const lead = ARTICLES.find(a => a.type === 'research') || ARTICLES[0];
 
-    const latest = `
+    const latest = (lead ? `
       <a class="f-col hov" href="${href(lead)}" data-reveal>
         ${fig(lead, 1)}
         ${meta(lead, `<i></i><span>${fmtDate(lead.date)}</span>`)}
-        <h3><span class="u">${plain(lead.title)}</span></h3>
-        <p class="dek">${lead.dek}</p>
-        <div class="foot"><b>${lead.stat.v}<small>${lead.stat.unit || ''}</small></b>${ARROW}</div>
-      </a>` +
+        <h3><span class="u">${esc(lead.plainTitle)}</span></h3>
+        <p class="dek">${esc(lead.dek)}</p>
+        <div class="foot">${lead.stat ? `<b>${esc(lead.stat.v)}<small>${esc(lead.stat.unit || '')}</small></b>` : `<span class="label dim">${esc(lead.format)}</span>`}${ARROW}</div>
+      </a>` : '') +
       UPCOMING.map((u, i) => `
       <a class="f-col soon hov" href="#/about?s=participate" data-reveal style="--rd:${i + 1}">
         <figure class="fig"><figcaption class="fig-cap"><span>Fig. ${pad(i + 2, 2)}</span><span>${u.theme}</span></figcaption>${ART.render(u.art)}</figure>
@@ -86,33 +100,32 @@
       <div class="ground" data-reveal></div>
     </section>
 
-    <section class="band paper section">
+    <section class="band paper section wwd">
       <div class="container">
         <div class="sec-head" data-reveal>
-          <h2 class="sec-title">What’s at stake</h2>
-          <span class="label dim">By the numbers</span>
+          <h2 class="sec-title">What We Do</h2>
+          <span class="label dim">Our work</span>
         </div>
-        ${secMark('dots')}
-        <div class="numbers">
-          <div class="num" data-reveal>
-            <span class="num-v"><span data-count="1.2">1.2</span><span class="o">bn</span></span>
-            <p>young people aged 15–24 — around one in six people on Earth.</p>
-            <span class="label">Source: UN DESA</span>
+        <div class="wwd-intro">
+          <p class="wwd-statement" data-split>We turn young people’s lived experiences into <em>evidence</em> for better decisions.</p>
+          <div class="wwd-aside" data-reveal style="--rd:2">
+            <p>Policy is written in ministries. It is lived in bedrooms, bus stops and job applications. We work in the gap between the two — starting with the problems young people actually face, not with verdicts on governments.</p>
+            <a class="link" href="#/about?s=method">How we work ${ARROW}</a>
           </div>
-          <div class="num" data-reveal style="--rd:1">
-            <span class="num-v">~<span data-count="10">10</span><span class="o">yrs</span></span>
-            <p>gap in the age young people leave home between northern and southern Europe.</p>
-            <span class="label">Source: Eurostat, 2023</span>
+        </div>
+        <div class="wwd-out">
+          <div class="wwd-out-head" data-reveal>
+            <span class="label">What we publish</span>
+            <a class="link" href="#/explore">Explore ${ARROW}</a>
           </div>
-          <div class="num" data-reveal style="--rd:2">
-            <span class="num-v">1<span class="o"> in </span>5</span>
-            <p>young people worldwide are not in employment, education or training.</p>
-            <span class="label">Source: ILO</span>
-          </div>
-          <div class="num" data-reveal style="--rd:3">
-            <span class="num-v"><span data-count="59">59</span><span class="o">%</span></span>
-            <p>of young people in a ten-country survey are very or extremely worried about climate change.</p>
-            <span class="label">Source: Lancet Planetary Health, 2021</span>
+          <div class="wwd-out-grid">
+            ${FORMATS.map((f, i) => `
+              <a class="hov" href="#/explore?format=${f.key}" data-reveal style="--rd:${i}">
+                ${ART.icon(f.icon)}
+                <h3><span class="u">${f.name}</span></h3>
+                <p>${f.blurb}</p>
+                <div class="foot"><span class="label dim">${formatCount(f.key) ? `${formatCount(f.key)} published` : 'Opening soon'}</span>${ARROW}</div>
+              </a>`).join('')}
           </div>
         </div>
       </div>
@@ -124,7 +137,6 @@
           <h2 class="sec-title">The Latest</h2>
           <a class="link" href="#/explore">All publications ${ARROW}</a>
         </div>
-        ${secMark('step')}
         <div class="f-trio trio-art">${latest}</div>
       </div>
     </section>
@@ -135,7 +147,6 @@
           <h2 class="sec-title">On the horizon</h2>
           <span class="label dim">Questions we’re tracking</span>
         </div>
-        ${secMark('arc')}
       </div>
       <div class="marquee" aria-hidden="true">
         <div class="marquee-track">
@@ -165,15 +176,15 @@
       <div class="container">
         <div class="ph-top">
           <span class="label o" data-reveal>The archive</span>
-          <span class="label dim" data-reveal style="--rd:1">Updated September 2026</span>
+          <span class="label dim" data-reveal style="--rd:1">${ARTICLES.length ? `Updated ${fmtDate(ARTICLES[0].date)}` : 'The archive'}</span>
         </div>
         <h1 class="display-xxl" data-split>Explore</h1>
         <div class="ph-foot">
-          <p class="lead" data-reveal>Policy briefs, research, youth voices, data stories and emerging issues — filed by theme, written with the people they’re about.</p>
+          <p class="lead" data-reveal>Research, the Data Lab and practical resources — built from young people’s lived experience and the best available evidence.</p>
           <dl class="ph-stats" data-reveal style="--rd:1">
             <div><dt data-count="${ARTICLES.length}">${ARTICLES.length}</dt><dd class="label dim">Published</dd></div>
             <div><dt data-count="${UPCOMING.length}">${UPCOMING.length}</dt><dd class="label dim">In research</dd></div>
-            <div><dt data-count="${THEMES.length}">${THEMES.length}</dt><dd class="label dim">Themes</dd></div>
+            <div><dt data-count="${FORMATS.length}">${FORMATS.length}</dt><dd class="label dim">Formats</dd></div>
           </dl>
         </div>
       </div>
@@ -182,18 +193,13 @@
     <section class="band paper">
       <div class="container filters" data-reveal>
         <div class="fl-row">
-          <span class="label dim">Theme</span>
-          <div class="chips" data-group="theme" role="group" aria-label="Filter by theme">
-            ${['All', ...THEMES.map(x => x.name)].map(n => `
-              <button class="chip" data-v="${n}" aria-pressed="false">${n}<sup>${n === 'All' ? ARTICLES.length : themeCount(n)}</sup></button>`).join('')}
-          </div>
-        </div>
-        <div class="fl-row">
           <span class="label dim">Format</span>
-          <div class="chips chips-sm" data-group="format" role="group" aria-label="Filter by format">
-            ${['All', ...FORMATS].map(n => `<button class="chip" data-v="${n}" aria-pressed="false">${n}</button>`).join('')}
+          <div class="chips" data-group="format" role="group" aria-label="Filter by format">
+            ${[{ key: 'all', name: 'All' }, ...FORMATS].map(f => `
+              <button class="chip" data-v="${f.key}" aria-pressed="false">${f.name}<sup>${f.key === 'all' ? ARTICLES.length : formatCount(f.key)}</sup></button>`).join('')}
           </div>
         </div>
+        <p class="fl-desc" aria-live="polite"></p>
         <div class="fl-tools">
           <label class="search">
             <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5.5"/><path d="M11 11l4 4"/></svg>
@@ -231,35 +237,36 @@
   PAGES.explore.title = () => 'Explore — Youth Dividend';
 
   const rowTpl = (a, i) => `
-    <a class="a-row hov" href="${href(a)}" data-slug="${a.slug}" data-reveal style="--rd:${Math.min(i, 8)}">
-      <span class="no">${pad(a.no)}</span>
+    <a class="a-row hov" href="${href(a)}" data-key="${a.type}/${esc(a.slug)}" data-reveal style="--rd:${Math.min(i, 8)}">
+      <span class="no">${esc(code(a))}</span>
       <div class="main">
-        <span class="m-meta meta"><span class="fmt">${fmtLabel(a)}</span><i></i><span>${a.theme}</span><i></i><span>${fmtDate(a.date)}</span></span>
-        <h3><span class="u">${plain(a.title)}</span></h3>
-        <p class="dek">${a.dek}</p>
+        <span class="m-meta meta"><span class="fmt">${a.format}</span><i></i><span>${tagText(a)}</span><i></i><span>${fmtDate(a.date)}</span></span>
+        <h3><span class="u">${esc(a.plainTitle)}</span></h3>
+        <p class="dek">${esc(a.dek)}</p>
+        ${a.tags.length ? `<span class="a-tags">${a.tags.map(t => `<span>${esc(t)}</span>`).join('')}</span>` : ''}
       </div>
-      <span class="c">${a.theme}</span>
-      <span class="c fmt">${fmtLabel(a)}</span>
+      <span class="c">${tagText(a)}</span>
+      <span class="c fmt">${a.format}</span>
       <span class="c c-date">${fmtDate(a.date)}</span>
       ${ARROW}
     </a>`;
 
   const edTpl = (a, i) => `
     <a class="ed-item hov" href="${href(a)}" data-reveal style="--rd:${i % 3}">
-      ${fig(a, a.no)}
+      ${fig(a, i + 1)}
       ${meta(a, `<i></i><span>${fmtDate(a.date)}</span>`)}
-      <h3><span class="u">${plain(a.title)}</span></h3>
-      <p class="dek">${a.dek}</p>
-      <div class="foot"><b>${a.stat.v}${a.stat.unit ? ' ' + a.stat.unit : ''}</b>${ARROW}</div>
+      <h3><span class="u">${esc(a.plainTitle)}</span></h3>
+      <p class="dek">${esc(a.dek)}</p>
+      <div class="foot"><b>${statShort(a)}</b>${ARROW}</div>
     </a>`;
 
   function bindExplore(r) {
     const matchName = (list, v) => v && list.find(x => x.toLowerCase() === String(v).toLowerCase().replace(/-/g, ' '));
     let viewPref = 'index';
     try { viewPref = localStorage.getItem('yd-view') || 'index'; } catch (e) { /* storage unavailable */ }
+    const want = String(r.q.format || '').toLowerCase();
     const st = {
-      theme: matchName(THEMES.map(x => x.name), r.q.theme) || 'All',
-      format: matchName(FORMATS, r.q.format) || 'All',
+      format: (FORMATS.find(f => f.key === want || f.name.toLowerCase() === want.replace(/-/g, ' ')) || { key: 'all' }).key,
       q: '',
       view: viewPref === 'editorial' ? 'editorial' : 'index',
     };
@@ -268,35 +275,35 @@
     const input = $('.search input');
 
     const sync = () => {
-      $$('[data-group="theme"] .chip').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === st.theme));
       $$('[data-group="format"] .chip').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === st.format));
       $$('.toggle button').forEach(b => b.setAttribute('aria-pressed', b.dataset.view === st.view));
       const qs = new URLSearchParams();
-      if (st.theme !== 'All') qs.set('theme', st.theme.toLowerCase());
-      if (st.format !== 'All') qs.set('format', st.format.toLowerCase().replace(/ /g, '-'));
+      if (st.format !== 'all') qs.set('format', st.format);
       history.replaceState(null, '', '#/explore' + (qs.toString() ? '?' + qs : ''));
     };
 
     const draw = () => {
       const q = st.q.trim().toLowerCase();
-      const list = byDate.filter(a =>
-        (st.theme === 'All' || a.theme === st.theme) &&
-        (st.format === 'All' || a.format === st.format) &&
-        (!q || [a.title, a.dek, a.theme, a.format].join(' ').toLowerCase().includes(q)));
+      const list = ARTICLES.filter(a =>
+        (st.format === 'all' || a.type === st.format) &&
+        (!q || [a.plainTitle, a.dek, a.format, a.code, ...a.tags].join(' ').toLowerCase().includes(q)));
 
       countEl.textContent = `Showing ${list.length} of ${ARTICLES.length}`;
+      const fmt = FORMATS.find(f => f.key === st.format);
+      $('.fl-desc').textContent = fmt ? fmt.blurb : 'Everything we have published, newest first.';
       hidePreview();
 
       if (!list.length) {
+        const soon = (!q && fmt && fmt.empty) || ['Nothing filed here — yet', 'We haven’t published on this.', 'Should we?', 'Suggest a problem'];
         results.innerHTML = `
           <div class="empty" data-reveal>
-            <span class="label o">Nothing filed here — yet</span>
-            <h3>We haven’t published on this.<br><span class="dim">Should we?</span></h3>
-            <a class="link" href="#/about?s=participate">Suggest a problem ${ARROW}</a>
+            <span class="label o">${soon[0]}</span>
+            <h3>${soon[1]}<br><span class="dim">${soon[2]}</span></h3>
+            <a class="link" href="#/about?s=participate">${soon[3]} ${ARROW}</a>
           </div>`;
       } else if (st.view === 'index') {
         results.innerHTML = `
-          <div class="a-head label"><span>No.</span><span>Title</span><span>Theme</span><span>Format</span><span class="c-date">Date</span><span></span></div>
+          <div class="a-head label"><span>No.</span><span>Title</span><span>Tags</span><span>Type</span><span class="c-date">Date</span><span></span></div>
           ${list.map(rowTpl).join('')}`;
       } else {
         results.innerHTML = `<div class="ed-grid">${list.map(edTpl).join('')}</div>`;
@@ -319,7 +326,7 @@
     if (fine && !reduce) {
       results.addEventListener('mouseover', e => {
         const row = e.target.closest('.a-row');
-        if (row) showPreview(bySlug(row.dataset.slug));
+        if (row) { const [type, slug] = row.dataset.key.split('/'); showPreview(bySlug(slug, type)); }
       });
       results.addEventListener('mouseleave', hidePreview);
       results.addEventListener('mousemove', e => { pv.tx = e.clientX; pv.ty = e.clientY; });
@@ -333,12 +340,13 @@
   const pv = { x: 0, y: 0, tx: 0, ty: 0, slug: null, raf: 0, on: false };
   function showPreview(a) {
     if (!a) return;
-    if (pv.slug !== a.slug) {
-      pv.slug = a.slug;
+    const key = `${a.type}/${a.slug}`;
+    if (pv.slug !== key) {
+      pv.slug = key;
       pvEl.innerHTML = `
-        <div class="fig-cap"><span>No. ${pad(a.no)}</span><span>${a.theme}</span></div>
+        <div class="fig-cap"><span>${esc(code(a))}</span><span>${esc(a.tags[0] || a.format)}</span></div>
         ${ART.render(a.art)}
-        <div class="pv-stat"><b>${a.stat.v}${a.stat.unit ? ' ' + a.stat.unit : ''}</b><span>${a.stat.l}</span></div>`;
+        <div class="pv-stat"><b>${statShort(a)}</b><span>${a.stat ? esc(a.stat.l) : esc(a.tags.join(' · '))}</span></div>`;
       const svg = $('.art', pvEl);
       stagger(svg, 60);
       requestAnimationFrame(() => requestAnimationFrame(() => svg.classList.add('in')));
@@ -377,7 +385,6 @@
     ];
     const ways = [
       ['Submit a problem', 'What is one rule, cost or system that is currently making your life or career harder than it should be? Anonymous if you prefer.', '5 minutes', 'mailto:hello@youthdividend.org?subject=Problem%20submission'],
-      ['Vote on the next question', 'Each month we put three possible research questions to the community. The one you pick becomes the next investigation.', 'Monthly', 'mailto:hello@youthdividend.org?subject=Community%20vote'],
       ['Share your experience', 'Selected contributors are invited to a 20-minute interview that turns a raw submission into structured qualitative evidence.', '20 minutes', 'mailto:hello@youthdividend.org?subject=Interview'],
       ['Collaborate with us', 'Researchers, youth organisations, universities and institutions who want to support — but never steer — independent research.', 'Institutions', 'mailto:hello@youthdividend.org?subject=Collaboration'],
     ];
@@ -392,7 +399,7 @@
         <h1 class="display-xl" data-split style="max-width:13ch">Evidence, from the people it’s <span class="o">about.</span></h1>
         <div class="ph-foot">
           <p class="lead" data-reveal>Youth Dividend is an independent, youth-focused research publication. We identify the problems young people actually face, investigate how different societies respond, and translate the findings into practical insight for the people making decisions.</p>
-          <div class="about-art" data-reveal style="--rd:1"><div data-speed="-0.05">${ART.render('globe')}</div></div>
+          <div class="about-art" data-reveal style="--rd:1"><div data-speed="-0.05">${ART.render('pulse')}</div></div>
         </div>
       </div>
     </section>
@@ -431,7 +438,6 @@
         </div>
         <p class="lead" data-reveal style="margin-bottom:clamp(48px,6vw,88px);max-width:46ch">Every investigation follows the same five-step framework, so findings can be compared across issues, countries and editions.</p>
         <div class="steps">
-          <div class="ground" data-reveal></div>
           ${steps.map((s, i) => `
             <div class="step" data-reveal style="--rd:${i}">
               <span class="n">${pad(i + 1, 2)}</span>
@@ -452,7 +458,7 @@
         ${secMark('dots')}
         <div class="join-head">
           <h2 class="display-l" data-split>Your experience is evidence. <span class="o">Put it on the record.</span></h2>
-          <p data-reveal>Young people aren’t the subject of this research — they set its agenda. There are four ways in, depending on how much time you have.</p>
+          <p data-reveal>Young people aren’t the subject of this research — they set its agenda. There are three ways in, depending on how much time you have.</p>
         </div>
         <div class="join-list">
           ${ways.map((w, i) => `
@@ -476,86 +482,92 @@
   };
   PAGES.about.title = () => 'About — Youth Dividend';
 
-  /* ---------- Read (article) ---------- */
-  PAGES.read = r => {
-    const a = bySlug(r.arg);
-    if (!a) return PAGES.notfound();
-    const idx = byDate.indexOf(a);
-    const next = byDate.length > 1 ? byDate[(idx + 1) % byDate.length] : null;
+  /* ---------- Posts: research/, data-lab/, resources/ ---------- */
+  // The next post in the same folder (older), wrapping round to the newest.
+  const nextOf = a => {
+    const list = ARTICLES.filter(x => x.type === a.type);
+    return list.length > 1 ? list[(list.indexOf(a) + 1) % list.length] : null;
+  };
+
+  // Markdown body → HTML: drop cap, anchored headings (for the contents list), attributed pull quotes.
+  function mdBody(a) {
+    const toc = [];
+    let html = CONTENT.md(a.body).replace('<p>', '<p class="dropcap">');
+    html = html.replace(/<h2>([\s\S]*?)<\/h2>/g, (m, inner) => {
+      const text = inner.replace(/<[^>]+>/g, '').trim();
+      const id = 'sec-' + text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      toc.push({ id, text });
+      return `<h2 id="${id}">${inner}</h2>`;
+    });
+    html = html.replace(/<blockquote>([\s\S]*?)<\/blockquote>/g, (m, inner) => {
+      const ps = inner.match(/<p>[\s\S]*?<\/p>/g) || [];
+      const last = ps[ps.length - 1] || '';
+      const credit = /^<p>\s*(—|&mdash;|--)\s*/.test(last);
+      const who = credit ? last.replace(/^<p>\s*(—|&mdash;|--)\s*/, '').replace(/<\/p>$/, '') : '';
+      return `<blockquote class="pull">${credit ? ps.slice(0, -1).join('') : inner}${who ? `<footer class="label">— ${who}</footer>` : ''}</blockquote>`;
+    });
+    return { html, toc };
+  }
+
+  function postPage(a) {
+    const body = mdBody(a);
+    const next = nextOf(a);
+    const questions = Array.isArray(a.questions) && a.questions.length ? `
+      <section id="sec-the-questions" class="md-questions">
+        <h2>The questions</h2>
+        <ul class="questions">
+          ${a.questions.map((q, i) => `<li data-reveal style="--rd:${i}">${ART.icon(q.icon || ['house', 'bars', 'globe', 'book', 'people'][i % 5])}<i></i><p>${esc(q.text || q)}</p></li>`).join('')}
+        </ul>
+      </section>` : '';
+    const toc = [...(questions ? [{ id: 'sec-the-questions', text: 'The questions' }] : []), ...body.toc];
+    // Questions sit after the opening paragraph.
+    const html = questions ? body.html.replace(/<\/p>/, `</p>${questions}`) : body.html;
+    const back = `#/explore?format=${a.type}`;
+    const file = a.file ? `<a class="cta magnetic" href="${esc(a.file)}" download><span>Download${a.fileLabel ? ' ' + esc(a.fileLabel) : ''}</span>${ARROW}</a>` : '';
 
     return `
     <article>
       <section class="band ink">
         <header class="container read-head">
-          <a class="back label" href="#/explore" data-reveal>${ARROW_BACK} The archive</a>
-          <div data-reveal>${meta(a, `<i></i><span>${fmtDate(a.date)}</span><i></i><span>${a.read} read</span>`)}</div>
-          <h1 class="display-xl" data-split>${t(a.title)}</h1>
-          <p class="lead" data-reveal>${a.dek}</p>
+          <a class="back label" href="${back}" data-reveal>${ARROW_BACK} ${esc(a.format)}</a>
+          <div data-reveal>${meta(a, `<i></i><span>${fmtDate(a.date)}</span>${a.read ? `<i></i><span>${esc(a.read)} read</span>` : ''}`)}</div>
+          <h1 class="display-xl" data-split>${t(esc(a.title))}</h1>
+          <p class="lead" data-reveal>${esc(a.dek)}</p>
+          ${file ? `<div data-reveal>${file}</div>` : ''}
         </header>
+        ${a.stat ? `
         <div class="container read-hero">
           <div data-reveal style="grid-column:1 / span 8">${fig(a, 1)}</div>
           <div data-reveal style="--rd:2;grid-column:9 / -1">${stat(a.stat)}</div>
-        </div>
+        </div>` : '<div class="read-hero-gap"></div>'}
       </section>
 
       <section class="band paper">
         <div class="container read-body">
           <aside class="read-aside">
             <div class="read-aside-in" data-reveal>
-              <nav class="toc" aria-label="In this piece">
+              ${toc.length ? `<nav class="toc" aria-label="In this piece">
                 <span class="label dim" style="margin-bottom:6px">In this piece</span>
-                <a href="#" data-jump="summary">Summary</a>
-                <a href="#" data-jump="questions">The questions</a>
-                <a href="#" data-jump="findings">Key findings</a>
-                <a href="#" data-jump="voice">In their words</a>
-                <a href="#" data-jump="method">Method</a>
-              </nav>
+                ${toc.map(x => `<a href="#" data-jump="${x.id}">${esc(x.text)}</a>`).join('')}
+              </nav>` : ''}
               <dl>
-                <div><dt class="label">No.</dt><dd>${pad(a.no)}</dd></div>
+                <div><dt class="label">No.</dt><dd>${esc(a.code)}</dd></div>
                 <div><dt class="label">Published</dt><dd>${new Date(a.date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</dd></div>
-                <div><dt class="label">By</dt><dd>Youth Dividend Research Desk, with young contributors</dd></div>
+                ${a.tags.length ? `<div><dt class="label">Tags</dt><dd class="dd-tags">${a.tags.map(x => `<span>${esc(x)}</span>`).join('')}</dd></div>` : ''}
+                <div><dt class="label">By</dt><dd>${esc(a.author || 'Youth Dividend Research Desk, with young contributors')}</dd></div>
               </dl>
             </div>
           </aside>
-
-          <div class="read-main">
-            <div class="prose" id="summary" data-reveal><p class="dropcap">${a.lede}</p></div>
-
-            ${a.questions ? `
-            <section id="questions">
-              <div class="block-h" data-reveal><h2>The questions</h2><span class="label dim">${a.questions.length}</span></div>
-              <ul class="questions">
-                ${a.questions.map((q, i) => `<li data-reveal style="--rd:${i}">${ART.icon(q.icon)}<i></i><p>${q.text}</p></li>`).join('')}
-              </ul>
-            </section>` : ''}
-
-            <section id="findings">
-              <div class="block-h" data-reveal><h2>Key findings</h2><span class="label dim">${a.findings.length} points</span></div>
-              <ol class="findings">
-                ${a.findings.map((f, i) => `<li data-reveal style="--rd:${i}"><span class="n">${pad(i + 1, 2)}</span><p>${f}</p></li>`).join('')}
-              </ol>
-            </section>
-
-            <blockquote class="pull" id="voice">
-              <p data-split>“${a.quote.text}”</p>
-              <footer class="label" data-reveal>— ${a.quote.who}</footer>
-            </blockquote>
-
-            <section class="method-box" id="method" data-reveal>
-              <span class="label o">Method</span>
-              <p>${a.method}</p>
-              <div class="frame">${STEPS.map((s, i) => `${i ? ARROW : ''}<span>${s}</span>`).join('')}</div>
-            </section>
-          </div>
+          <div class="read-main md-body">${html}</div>
         </div>
       </section>
 
       <section class="band ink">
         ${next ? `
-        <nav class="container read-next" aria-label="Next publication">
+        <nav class="container read-next" aria-label="Next">
           <a class="hov" href="${href(next)}">
-            <div class="l" data-reveal><span class="label dim">Next</span>${meta(next)}</div>
-            <h2 class="display-l" data-split><span class="u">${plain(next.title)}</span></h2>
+            <div class="l" data-reveal><span class="label dim">Next in ${esc(next.format)}</span>${meta(next)}</div>
+            <h2 class="display-l" data-split><span class="u">${esc(next.plainTitle)}</span></h2>
             ${ARROW}
           </a>
         </nav>` : `
@@ -568,8 +580,19 @@
         </div>`}
       </section>
     </article>`;
-  };
-  PAGES.read.title = r => { const a = bySlug(r.arg); return a ? `${plain(a.title)} — Youth Dividend` : 'Not found — Youth Dividend'; };
+  }
+
+  // One route per content folder: #/research/<slug>, #/data-lab/<slug>, #/resources/<slug>
+  Object.keys(TYPES).forEach(type => {
+    PAGES[type] = r => {
+      const a = bySlug(r.arg, type);
+      if (!a) return PAGES.notfound();
+      if (type === 'data-lab' && window.YD_LAB) return window.YD_LAB.page(a, nextOf(a));
+      return postPage(a);
+    };
+    PAGES[type].title = r => { const a = bySlug(r.arg, type); return a ? `${a.plainTitle} — ${a.format} — Youth Dividend` : 'Not found — Youth Dividend'; };
+    PAGES[type].isPost = true;
+  });
 
   /* ---------- 404 ---------- */
   PAGES.notfound = () => `
@@ -723,11 +746,13 @@
   /* ==========================================================================
      Router + page transitions
      ========================================================================== */
+  const ALIASES = { read: 'research', data: 'data-lab' }; // earlier link formats keep working
   function parse() {
     const h = location.hash.replace(/^#/, '') || '/';
     const [path, qs] = h.split('?');
     const parts = path.split('/').filter(Boolean);
-    return { name: parts[0] || 'home', arg: parts[1], q: Object.fromEntries(new URLSearchParams(qs || '')) };
+    const name = parts[0] || 'home';
+    return { name: ALIASES[name] || name, arg: parts[1] ? decodeURIComponent(parts[1]) : undefined, q: Object.fromEntries(new URLSearchParams(qs || '')) };
   }
 
   function setNav(name) {
@@ -739,14 +764,16 @@
     hidePreview();
     view.innerHTML = page(r);
     document.title = page.title(r);
-    setNav(r.name === 'read' ? 'explore' : r.name);
-    document.body.classList.toggle('reading', r.name === 'read');
+    const isPost = !!(PAGES[r.name] && PAGES[r.name].isPost);
+    setNav(isPost ? 'explore' : r.name);
+    document.body.classList.toggle('reading', isPost);
     progress.style.transform = 'scaleX(0)';
     nav.classList.remove('hidden');
     window.scrollTo(0, 0);
 
     if (r.name === 'explore') bindExplore(r);
     init();
+    if (r.name === 'data-lab' && window.YD_LAB) window.YD_LAB.mount(view);
 
     $$('[data-jump]').forEach(a => a.addEventListener('click', e => {
       e.preventDefault();
@@ -766,11 +793,18 @@
   async function go() {
     const r = parse();
     const my = ++token;
-    if (first || reduce) {
+    if (first) {
       first = false;
+      loadbar.style.transform = 'scaleX(.4)';
+      await CONTENT.ready;
+      ARTICLES = CONTENT.all().map(toArticle);
+      loadbar.style.transform = '';
+      loadbar.classList.add('done');
+      if (my !== token) return;
       render(r);
       return;
     }
+    if (reduce) { render(r); return; }
     const b = document.body;
     loadbar.classList.remove('done');
     loadbar.style.transition = 'none';

@@ -1,0 +1,21 @@
+{
+  "generated": "2026-09-23T13:17:28+00:00",
+  "folders": [
+    "research",
+    "data-lab",
+    "resources"
+  ],
+  "files": [
+    "research/01-who-gets-to-leave-home.md",
+    "data-lab/01-age-of-independence.md",
+    "data-lab/02-cost-of-being-young.md",
+    "data-lab/03-first-paycheck.md",
+    "data-lab/04-where-young-people-are-going.md",
+    "data-lab/05-youth-jobs-map.md",
+    "data-lab/06-generation-gap.md",
+    "data-lab/07-education-to-work.md",
+    "data-lab/08-a-day-in-the-life.md",
+    "data-lab/09-youth-population-map.md",
+    "data-lab/10-digital-generation.md"
+  ]
+}

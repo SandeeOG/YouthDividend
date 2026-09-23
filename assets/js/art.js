@@ -208,8 +208,6 @@
   /* Minimal section rules — one small drawn motif per editorial section */
   const RULES = {
     dots: P('M0 22H136') + D(156, 22, 6) + D(176, 22, 6, false) + D(196, 22, 6, false),
-    step: P('M0 40H58V26H116V12H186') + D(194, 12, 6),
-    arc: P('M0 34Q50 2 100 18T196 6') + D(196, 6, 6),
     cross: P('M0 22H200') + P('M120 6V38', 1) + D(120, 22, 6),
   };
   const rule = name => svg(RULES[name] || RULES.dots, '0 0 200 44', 'rule');
@@ -226,6 +224,7 @@
     phone: P('M11 4h10a2 2 0 0 1 2 2v20a2 2 0 0 1-2 2H11a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z') + P('M14 24h4', 1),
     people: C(11, 11, 3.5) + C(21, 11, 3.5, 1) + P('M4 26c0-4 3-7 7-7s7 3 7 7') + P('M18 20c1-.7 2-1 3-1 4 0 7 3 7 7', 1),
     check: C(16, 16, 11) + P('M11 16.5l3.5 3.5 6.5-7.5', 1),
+    doc: P('M9 4h10l5 5v19H9z') + P('M19 4v5h5') + P('M13 16h8') + P('M13 21h6', 1),
   };
   const icon = name => svg(I[name] || I.house, '0 0 32 32', 'icon');
 
