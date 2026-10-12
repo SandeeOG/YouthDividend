@@ -1187,7 +1187,7 @@
   const observers = [];
   function mount(root) {
     observers.splice(0).forEach(o => o.disconnect());
-    const post = root.querySelector('.dl-post');
+    const post = root.querySelector('.dl-post, [data-dl-root]');
     if (!post) return;
     const slug = post.dataset.slug;
     const shared = {}; // figures that share a control key stay in sync (e.g. the country picker)
@@ -1269,5 +1269,8 @@
     }
   }
 
-  window.YD_LAB = { page, mount, stat: statOf, figure: figById, figures: () => Object.keys(FIGS), datasets: () => Object.keys(DATASETS) };
+  // Any post (e.g. research/) can embed {{ figure … }} and ```chart blocks; this renders its body.
+  const embed = post => renderBody(post);
+
+  window.YD_LAB = { page, mount, embed, stat: statOf, figure: figById, figures: () => Object.keys(FIGS), datasets: () => Object.keys(DATASETS) };
 })();

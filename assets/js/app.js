@@ -65,23 +65,15 @@
 
   /* ---------- Home ---------- */
   PAGES.home = () => {
-    const lead = ARTICLES.find(a => a.type === 'research') || ARTICLES[0];
-
-    const latest = (lead ? `
-      <a class="f-col hov" href="${href(lead)}" data-reveal>
-        ${fig(lead, 1)}
-        ${meta(lead, `<i></i><span>${fmtDate(lead.date)}</span>`)}
-        <h3><span class="u">${esc(lead.plainTitle)}</span></h3>
-        <p class="dek">${esc(lead.dek)}</p>
-        <div class="foot">${lead.stat ? `<b>${esc(lead.stat.v)}<small>${esc(lead.stat.unit || '')}</small></b>` : `<span class="label dim">${esc(lead.format)}</span>`}${ARROW}</div>
-      </a>` : '') +
-      UPCOMING.map((u, i) => `
-      <a class="f-col soon hov" href="#/about?s=participate" data-reveal style="--rd:${i + 1}">
-        <figure class="fig"><figcaption class="fig-cap"><span>Fig. ${pad(i + 2, 2)}</span><span>${u.theme}</span></figcaption>${ART.render(u.art)}</figure>
-        <div class="meta"><span class="fmt">${u.status}</span><i></i><span>${u.theme}</span></div>
-        <h3><span class="u">${u.title}</span></h3>
-        <p class="dek">${u.dek}</p>
-        <div class="foot"><span class="label dim">${u.note}</span>${ARROW}</div>
+    // The three newest published posts, from any folder.
+    // The three newest Research articles.
+    const latest = ARTICLES.filter(a => a.type === 'research').slice(0, 3).map((a, i) => `
+      <a class="f-col hov" href="${href(a)}" data-reveal style="--rd:${i}">
+        ${fig(a, i + 1)}
+        ${meta(a, `<i></i><span>${fmtDate(a.date)}</span>`)}
+        <h3><span class="u">${esc(a.plainTitle)}</span></h3>
+        <p class="dek">${esc(a.dek)}</p>
+        <div class="foot">${a.stat ? `<b>${esc(a.stat.v)}<small>${esc(a.stat.unit || '')}</small></b>` : `<span class="label dim">${esc(a.series || a.format)}</span>`}${ARROW}</div>
       </a>`).join('');
 
     return `
@@ -183,7 +175,7 @@
           <p class="lead" data-reveal>Research, the Data Lab and practical resources — built from young people’s lived experience and the best available evidence.</p>
           <dl class="ph-stats" data-reveal style="--rd:1">
             <div><dt data-count="${ARTICLES.length}">${ARTICLES.length}</dt><dd class="label dim">Published</dd></div>
-            <div><dt data-count="${UPCOMING.length}">${UPCOMING.length}</dt><dd class="label dim">In research</dd></div>
+            <div><dt data-count="${formatCount('research')}">${formatCount('research')}</dt><dd class="label dim">Research</dd></div>
             <div><dt data-count="${FORMATS.length}">${FORMATS.length}</dt><dd class="label dim">Formats</dd></div>
           </dl>
         </div>
@@ -214,25 +206,6 @@
         </div>
       </div>
       <div class="container archive"><div id="results"></div></div>
-    </section>
-
-    <section class="band ink section">
-      <div class="container pipeline">
-        <div class="sec-head" data-reveal>
-          <h2 class="sec-title">In research</h2>
-          <span class="label dim">Next from the desk</span>
-        </div>
-        ${secMark('cross')}
-        <div class="f-trio">
-          ${UPCOMING.map((u, i) => `
-            <a class="f-col soon hov" href="#/about?s=participate" data-reveal style="--rd:${i}">
-              <div class="meta"><span class="fmt">${u.status}</span><i></i><span>${u.theme}</span></div>
-              <h3><span class="u">${u.title}</span></h3>
-              <p class="dek">${u.dek}</p>
-              <div class="foot"><span class="label dim">${u.note}</span>${ARROW}</div>
-            </a>`).join('')}
-        </div>
-      </div>
     </section>`;
   PAGES.explore.title = () => 'Explore — Youth Dividend';
 
@@ -377,7 +350,7 @@
   /* ---------- About ---------- */
   PAGES.about = () => {
     const steps = [
-      ['Problem', 'bars', 'We start with a concrete friction young people actually experience — then ask whether it is an individual problem or a structural pattern.'],
+      ['Problem', 'bars', 'We start with a concrete friction that young people directly identify — then ask whether it is an individual problem or a structural pattern.'],
       ['People', 'people', 'We speak to the people living it: students, graduates, young workers, parents, employers and practitioners. Not to collect quotes, but to see how a system behaves in a life.'],
       ['Policy', 'book', 'Only then do we look at responses — comparing how different countries, cities and institutions have tried to solve the same problem.'],
       ['Proof', 'check', 'We test claims against existing evidence: OECD, Eurostat, national statistics, academic research — and say plainly where evidence is thin.'],
@@ -425,7 +398,7 @@
         <ol class="def-list">
           <li data-reveal>The tangible benefit young people receive from the systems, institutions and policies that shape their early adult lives.</li>
           <li data-reveal style="--rd:1">A recurring question: who receives the benefit, who bears the cost, how large it is, when it arrives, and whether it is evenly shared.</li>
-          <li data-reveal style="--rd:2"><em>(Youth Dividend)</em> An independent publication that asks, issue by issue: what are young people actually getting?</li>
+          <li data-reveal style="--rd:2"><em>(Youth Dividend)</em> <span class="def-quote">“An independent publication that asks, issue by issue: what are young people actually getting?”</span></li>
         </ol>
       </div>
     </section>
@@ -492,7 +465,8 @@
   // Markdown body → HTML: drop cap, anchored headings (for the contents list), attributed pull quotes.
   function mdBody(a) {
     const toc = [];
-    let html = CONTENT.md(a.body).replace('<p>', '<p class="dropcap">');
+    // Bodies may embed charts ({{ figure … }} or ```chart blocks), rendered by the Data Lab kit.
+    let html = (window.YD_LAB ? window.YD_LAB.embed(a).html : CONTENT.md(a.body)).replace('<p>', '<p class="dropcap">');
     html = html.replace(/<h2>([\s\S]*?)<\/h2>/g, (m, inner) => {
       const text = inner.replace(/<[^>]+>/g, '').trim();
       const id = 'sec-' + text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -504,7 +478,10 @@
       const last = ps[ps.length - 1] || '';
       const credit = /^<p>\s*(—|&mdash;|--)\s*/.test(last);
       const who = credit ? last.replace(/^<p>\s*(—|&mdash;|--)\s*/, '').replace(/<\/p>$/, '') : '';
-      return `<blockquote class="pull">${credit ? ps.slice(0, -1).join('') : inner}${who ? `<footer class="label">— ${who}</footer>` : ''}</blockquote>`;
+      const text = credit ? ps.slice(0, -1).join('') : inner;
+      // Short quotes become large pull quotes; longer interview excerpts stay at reading size.
+      const cls = text.replace(/<[^>]+>/g, '').length > 220 ? 'excerpt' : 'pull';
+      return `<blockquote class="${cls}">${text}${who ? `<footer class="label">— ${who}</footer>` : ''}</blockquote>`;
     });
     return { html, toc };
   }
@@ -526,7 +503,7 @@
     const file = a.file ? `<a class="cta magnetic" href="${esc(a.file)}" download><span>Download${a.fileLabel ? ' ' + esc(a.fileLabel) : ''}</span>${ARROW}</a>` : '';
 
     return `
-    <article>
+    <article data-dl-root data-slug="${esc(a.slug)}">
       <section class="band ink">
         <header class="container read-head">
           <a class="back label" href="${back}" data-reveal>${ARROW_BACK} ${esc(a.format)}</a>
@@ -773,7 +750,7 @@
 
     if (r.name === 'explore') bindExplore(r);
     init();
-    if (r.name === 'data-lab' && window.YD_LAB) window.YD_LAB.mount(view);
+    if (window.YD_LAB && view.querySelector('.dl-fig')) window.YD_LAB.mount(view);
 
     $$('[data-jump]').forEach(a => a.addEventListener('click', e => {
       e.preventDefault();
@@ -833,21 +810,39 @@
     }
   });
 
-  /* ---------- Newsletter ---------- */
-  // TODO: connect to your newsletter provider (e.g. POST to its API) before launch.
+  /* ---------- Newsletter (Formspree) ---------- */
+  // Sign-ups are sent to Formspree, which emails them to the account owner and keeps a list
+  // in the Formspree dashboard.
+  const FORMSPREE = 'https://formspree.io/f/mljgwojl';
   const form = $('.news-form');
-  form.addEventListener('submit', e => {
+  form.addEventListener('submit', async e => {
     e.preventDefault();
-    const input = $('input', form), msg = $('.news-msg', form);
+    const input = $('input[type="email"]', form), msg = $('.news-msg', form), btn = $('button', form);
     if (!input.checkValidity() || !input.value) {
       msg.className = 'news-msg';
       msg.textContent = 'Please enter a valid email address.';
       input.focus();
       return;
     }
-    msg.className = 'news-msg ok';
-    msg.textContent = 'Thank you — you’ll hear from us with the next investigation.';
-    input.value = '';
+    btn.disabled = true;
+    msg.className = 'news-msg';
+    msg.textContent = 'Subscribing…';
+    try {
+      const r = await fetch(FORMSPREE, {
+        method: 'POST',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: input.value, _subject: 'New Youth Dividend newsletter sign-up', source: 'Website footer' }),
+      });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
+      msg.className = 'news-msg ok';
+      msg.textContent = 'Thank you — you’ll hear from us with the next investigation.';
+      input.value = '';
+    } catch (err) {
+      msg.className = 'news-msg';
+      msg.textContent = 'Sorry, that didn’t go through. Please try again in a moment.';
+    } finally {
+      btn.disabled = false;
+    }
   });
 
   go();
